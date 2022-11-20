@@ -1,5 +1,4 @@
 # **PaperTrading: CS50 Final Project**
-#### **Video Demo:** <URL>
 
 &nbsp;
 
