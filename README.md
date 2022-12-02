@@ -101,7 +101,7 @@ In the Quote tab on the top of the website, users can input a stock name and see
 &nbsp;
 
 ### **Auto-Complete**
-Using source code online and [Finnhub's API] (https://finnhub.io/docs/api/stock-symbols), Auto-Complete functionality was added to the Quote tab. As users type into the input box, the application searches through the list of stock names to determine possible suggestions. This code was based on an article by [Geeks for Geeks](https://www.geeksforgeeks.org/autocomplete-input-suggestion-using-python-and-flask/), with [styling](https://stackoverflow.com/questions/17838380/styling-jquery-ui-autocomplete) and [adjusted search functionality](https://stackoverflow.com/questions/43615966/jquery-ui-autocomplete-match-first-letter-typed) provided via Stack Overflow.
+Using source code online and [Finnhub's API](https://finnhub.io/docs/api/stock-symbols), Auto-Complete functionality was added to the Quote tab. As users type into the input box, the application searches through the list of stock names to determine possible suggestions. This code was based on an article by [Geeks for Geeks](https://www.geeksforgeeks.org/autocomplete-input-suggestion-using-python-and-flask/), with [styling](https://stackoverflow.com/questions/17838380/styling-jquery-ui-autocomplete) and [adjusted search functionality](https://stackoverflow.com/questions/43615966/jquery-ui-autocomplete-match-first-letter-typed) provided via Stack Overflow.
 
 ![autocomplete](/pictures/autocomplete.gif)
 
