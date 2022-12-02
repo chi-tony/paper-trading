@@ -22,13 +22,13 @@ After registering, users are directed to the Index page, which provides users wi
 
 **Light Mode**:
 
-![PaperTrading Home Page - Light Mode](../../paper-trading/static/light-mode.png)
+![PaperTrading Home Page - Light Mode](/static/light-mode.png)
 
 &nbsp;
 
 **Dark Mode (Dark Reader Chrome Extension)**:
 
-![PaperTrading Home Page - Dark Mode](../../paper-trading/static/dark-mode.png)
+![PaperTrading Home Page - Dark Mode](/static/dark-mode.png)
 
 Within the index page, there are three main components to this overview, namely:
 1. Summary
@@ -75,7 +75,7 @@ PaperTrading also tracks the total current realized gains that the user has. Rea
 
 Along with a portfolio summary, the index page contains a donut chart showing a distribution of how much of each stock the user holds and how much cash they have. Using a JavaScript code created by Google developers [here](https://developers.google.com/chart/interactive/docs/gallery/piechart#fullhtml), stock symbols and their total values are added to the data and presented in a donut chart. When the user hovers over a segment of the chart, it reveals how much they have in the stock and the percentage of their portfolio that it represents.
 
-![Donut Chart](../../paper-trading/pictures/donut-chart.gif)
+![Donut Chart](/pictures/donut-chart.gif)
 
 &nbsp;
 
@@ -83,7 +83,7 @@ Along with a portfolio summary, the index page contains a donut chart showing a 
 
 Within the holdings table, the user has green buy and red sell buttons on each of their holdings which link to the buy and sell pages for easily trading shares. On the buy and sell pages, the default values for the stock symbol are then set to the stock that was pressed from the index page (with the use of URL parameters).
 
-![Sell Button](../../paper-trading/pictures/sell-button.gif)
+![Sell Button](/pictures/sell-button.gif)
 
 &nbsp;
 
@@ -91,7 +91,7 @@ Within the holdings table, the user has green buy and red sell buttons on each o
 
 Using conditional statements with Jinja syntax in HTML, all gains on the index page have their color formatted depending on if the number is positive or negative. Positive numbers are formatted as green with positive signs and negative numbers are formatted as red with negative signs.
 
-![Gains](../../paper-trading/pictures/gain.png)
+![Gains](/pictures/gain.png)
 
 &nbsp;
 
@@ -103,7 +103,7 @@ In the Quote tab on the top of the website, users can input a stock name and see
 ### **Auto-Complete**
 Using source code online and [Yong Hong Tan's full list of stocks](https://medium.datadriveninvestor.com/download-list-of-all-stock-symbols-using-this-python-package-12937073b25), Auto-Complete functionality was added to the Quote tab. As users type into the input box, the application searches through the list of stock names to determine possible suggestions. This code was based on an article by [Geeks for Geeks](https://www.geeksforgeeks.org/autocomplete-input-suggestion-using-python-and-flask/), with [styling](https://stackoverflow.com/questions/17838380/styling-jquery-ui-autocomplete) and [adjusted search functionality](https://stackoverflow.com/questions/43615966/jquery-ui-autocomplete-match-first-letter-typed) provided via Stack Overflow.
 
-![autocomplete](../../paper-trading/pictures/autocomplete.gif)
+![autocomplete](/pictures/autocomplete.gif)
 
 &nbsp;
 
@@ -128,7 +128,7 @@ The program checks whether the user has sufficient cash available to buy the des
 
 In addition to the features above, the Sell page allows users to select only from their current holdings as stocks that they can sell.
 
-![sell](../../paper-trading/pictures/sell.gif)
+![sell](/pictures/sell.gif)
 
 &nbsp;
 
@@ -156,7 +156,7 @@ Users can see a log of their trading transactions, which includes:
 
 See below for an example:
 
-![history](../../paper-trading/pictures/history.png)
+![history](/pictures/history.png)
 
 &nbsp;
 
