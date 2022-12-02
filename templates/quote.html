@@ -1,0 +1,31 @@
+{% extends "layout.html" %}
+
+{% block head %}
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.js">
+</script>
+
+<script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/jquery-ui.js">
+</script>
+
+<link href="static/styles.css" rel="stylesheet">
+
+{% endblock %}
+
+{% block title %}
+Quote
+{% endblock %}
+
+{% block main %}
+<h2>Stock Quote</h2>
+<br>
+<form action="/quote" method="post">
+    <div class="mb-3">
+        <input autocomplete="off" autofocus class="form-control mx-auto w-auto" id="symbol" name="symbol"
+            placeholder="Symbol" type="text">
+        <script>
+            {% include "autocomplete.js" %}
+        </script>
+    </div>
+    <button class="btn btn-primary" type="submit">Quote</button>
+</form>
+{% endblock %}

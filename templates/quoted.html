@@ -1,0 +1,27 @@
+{% extends "layout.html" %}
+
+{% block title %}
+Quote
+{% endblock %}
+
+{% block main %}
+<h2>Stock Quote</h2>
+<br>
+<form action="/quoted" method="post">
+    <div class="mb-3">
+        <!-- Show name, symbol, and price as USD in a table -->
+        A share of <b>{{ name }}</b> costs <b>{{ price | usd}}</b>.
+        <br>
+        Symbol: <b>{{ symbol }}</b>
+        <br>
+        Yahoo: <a href="https://finance.yahoo.com/quote/{{ symbol }}/" style="text-decoration:none">{{ symbol }}</a>
+        <br>
+        ⮟
+    </div>
+</form>
+
+<!-- Add button to buy shares with default selected symbol -->
+<a href="/buy?symbol={{ symbol }}" style="text-decoration:none"><button class="btn btn-primary"
+        type="submit">Buy</button></a>
+
+{% endblock %}

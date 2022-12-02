@@ -1,0 +1,33 @@
+{% extends "layout.html" %}
+
+{% block title %}
+Sell
+{% endblock %}
+
+{% block main %}
+<h2>Sell Shares</h2>
+<br>
+<form action="/sell" method="post">
+    <div class="mb-3">
+        <!-- Create dropdown list -->
+        <select class="form-control mx-auto w-auto" id="symbol" name="symbol">
+            <!-- Set default value -->
+            <option disabled {% if index_sell=="" %} selected value {% else %} {% endif %}>Symbol ▼</option>
+            <!-- Loop through symbols in portfolio -->
+            {% for holding_symbol in holding_symbols %}
+            <!-- Assign value and selection -->
+            <option value="{{ holding_symbol['symbol'] }}" {% if index_sell==holding_symbol['symbol'] %} selected value
+                {% else %} {% endif %}>{{ holding_symbol["symbol"] }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="mb-3">
+        <input autocomplete="off" class="form-control mx-auto w-auto" id="shares" name="shares" placeholder="Shares"
+            type="number" {% if index_sell=="" %} {% else %} autofocus {% endif %}>
+    </div>
+    Cash Available: <b>{{ cash | usd }}</b>
+    <br>
+    <br>
+    <button class="btn btn-primary" type="submit">Sell</button>
+</form>
+{% endblock %}

@@ -1,0 +1,28 @@
+{% extends "layout.html" %}
+
+{% block title %}
+Account
+{% endblock %}
+
+{% block main %}
+<h2>Update Password</h2>
+<br>
+<form action="/account" method="post">
+    <div class="mb-3">
+        <input class="form-control mx-auto w-auto" id="current_password" name="current_password"
+            placeholder="Current Password" type="password">
+    </div>
+    <div class="mb-3">
+        <input class="form-control mx-auto w-auto" id="new_password" name="new_password" placeholder="New Password"
+            type="password">
+    </div>
+    <div class="mb-3">
+        <input class="form-control mx-auto w-auto" id="confirmation" name="confirmation"
+            placeholder="New Password (again)" type="password">
+    </div>
+    <button class="btn btn-primary" type="submit">Update</button>
+    <br>
+    <br>
+    <p style="font-size: 80%">Password must contain at least 6 characters, 1 number, and 1 symbol.</p>
+</form>
+{% endblock %}

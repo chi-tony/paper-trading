@@ -1,0 +1,187 @@
+{% extends "layout.html" %}
+
+{% block head %}
+<!-- Add Google donut chart as per https://developers.google.com/chart/interactive/docs/gallery/piechart#fullhtml -->
+<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+<script type="text/javascript">
+    {% include "chart.js" %}
+</script>
+{% endblock %}
+
+{% block title %}
+Dashboard
+{% endblock %}
+
+{% block main %}
+<div class="section">
+    <div class="parent grid-parent">
+        <div class="child">
+            <hr>
+            <h3><u>Portfolio Value:</u></h3>
+            <h1>{{ total | usd }}</h1>
+            <hr>
+            <h4><u>Cash:</u></h4>
+            <h4>{{ cash | usd }} ({{ (cash / total * 100) | round | int }}%)</h4>
+            <hr>
+            <h3 class="text-heading"><u>Gains:</u></h3>
+            <br>
+            <h4 class="text-heading">Unrealized Gains:</h4>&nbsp;
+
+            <!-- Check if unrealized gains are positive and assign color class accordingly as format -->
+            <h4 {% if unrealized>= 0.01 %}
+                class="positive-heading"
+                {% elif unrealized < 0.01 and unrealized> -0.01 %}
+                    class="zero-heading"
+                    {% else %}
+                    class="negative-heading"
+                    {% endif %}>
+
+                    {% if unrealized >= 0 %}
+                    +{{ '%0.2f' | format(unrealized | float) }} (+{{ '%0.2f'| format(unrealized / total * 100 | float)
+                    }}%)
+                    {% else %}
+                    {{ '%0.2f' | format(unrealized | float) }} ({{ '%0.2f'| format(unrealized / total * 100 | float)
+                    }}%)
+                    {% endif %}
+            </h4>
+            <br>
+            <h4 class="text-heading">Realized Gains:</h4>&nbsp;
+            <h4 {% if realized>= 0.01 %}
+                class="positive-heading"
+                {% elif realized < 0.01 and realized> -0.01 %}
+                    class="zero-heading"
+                    {% else %}
+                    class="negative-heading"
+                    {% endif %}>
+
+                    {% if realized >= 0 %}
+                    +{{ '%0.2f' | format(realized | float) }} (+{{ '%0.2f'| format(realized / total * 100 | float) }}%)
+                    {% else %}
+                    {{ '%0.2f' | format(realized | float) }} ({{ '%0.2f'| format(realized / total * 100 | float) }}%)
+                    {% endif %}
+            </h4>
+            <br>
+            <h4 class="text-heading">Total Gains:</h4>&nbsp;
+            <h4 {% if gains>= 0.01 %}
+                class="positive-heading"
+                {% elif gains < 0.01 and gains> -0.01 %}
+                    class="zero-heading"
+                    {% else %}
+                    class="negative-heading"
+                    {% endif %}>
+
+                    {% if gains >= 0 %}
+                    +{{ '%0.2f' | format(gains | float) }} (+{{ '%0.2f'| format(gains / total * 100 | float) }}%)
+                    {% else %}
+                    {{ '%0.2f' | format(gains | float) }} ({{ '%0.2f'| format(gains / total * 100 | float) }}%)
+                    {% endif %}
+            </h4>
+            <hr>
+        </div>
+        <div class="child">
+            <div id="donut_chart"></div>
+        </div>
+    </div>
+</div>
+
+<div class="section">
+
+    <body>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Buy</th>
+                    <th>Sell</th>
+                    <th>Symbol</th>
+                    <th>Shares</th>
+                    <th>Avg. Cost</th>
+                    <th>Price</th>
+                    <th>Total Gain</th>
+                    <th>Total Change</th>
+                    <th>Value</th>
+                    <th>% Portfolio</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Loop through the database entries to display in table -->
+                {% for holding in holdings %}
+                <tr>
+                    <!-- Add button to buy shares with default selected symbol -->
+                    <td><a href="/buy?symbol={{ holding[" symbol"] }}" style="text-decoration:none">
+                            <div class="buy">+</div>
+                        </a></td>
+                    <!-- Add button to sell shares with default selected symbol -->
+                    <td><a href="/sell?symbol={{ holding[" symbol"] }}" style="text-decoration:none">
+                            <div class="sell">-</div>
+                        </a></td>
+                    <!-- Get symbol of holding -->
+                    <td>{{ holding["symbol"] }}</td>
+                    <!-- Get number of shares held -->
+                    <td>{{ holding["shares"] }}</td>
+                    <!-- Get average cost and format as USD -->
+                    <td>{{ holding["average_cost"] | usd }}</td>
+                    <!-- Get current price and format as USD -->
+                    <td>{{ holding["price"] | usd }}</td>
+                    <!-- Get total gain and format color depending on positive or negative-->
+                    <td {% if holding["total_gain"]> 0 %}
+                        class="positive-table"
+                        {% elif holding["total_gain"] == 0 %}
+                        class="zero-table"
+                        {% else %}
+                        class="negative-table"
+                        {% endif %}>
+                        {% if holding["total_gain"] >= 0 %}
+                        +{{ '%0.2f' | format(holding["total_gain"] | float) }}
+                        {% else %}
+                        {{ '%0.2f' | format(holding["total_gain"] | float) }}
+                        {% endif %}
+                    </td>
+                    <!-- Get total change and format color depending on positive or negative-->
+                    <td {% if holding["total_change"]> 0 %}
+                        class="positive-table"
+                        {% elif holding["total_change"] == 0 %}
+                        class="zero-table"
+                        {% else %}
+                        class="negative-table"
+                        {% endif %}>
+                        {% if holding["total_change"] >= 0 %}
+                        +{{ '%0.2f' | format(holding["total_change"] | float) }}%
+                        {% else %}
+                        {{ '%0.2f' | format(holding["total_change"] | float) }}%
+                        {% endif %}</td>
+                    <!-- Get total value and format as USD -->
+                    <td>{{ holding["total"] | usd }}</td>
+                    <td>{{ '%0.2f' | format(holding["total"] / total * 100 | float) }}% </td>
+                </tr>
+                {% endfor %}
+                <tr>
+                    <th></th>
+                    <th></th>
+                    <th></th>
+                    <th></th>
+                    <th></th>
+                    <th></th>
+                    <th></th>
+                    <th>Holdings</th>
+                    <th>{{ holds | usd }}</th>
+                    <th>{{ '%0.2f' | format((1 - cash / total) * 100 | float) }}%</th>
+                </tr>
+                <tr>
+                    <th></th>
+                    <th></th>
+                    <th></th>
+                    <th></th>
+                    <th></th>
+                    <th></th>
+                    <th></th>
+                    <th>Cash</th>
+                    <th>{{ cash | usd }} </th>
+                    <th>{{ '%0.2f' | format(cash / total * 100 | float) }}%</th>
+                </tr>
+            </tbody>
+        </table>
+
+    </body>
+</div>
+
+{% endblock %}

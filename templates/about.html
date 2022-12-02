@@ -1,0 +1,21 @@
+{% extends "layout.html" %}
+
+{% block head %}
+{% endblock %}
+
+{% block title %}
+About
+{% endblock %}
+
+{% block main %}
+<h2>About: Coming Soon!</h2>
+<br>
+<div class="mb-3">
+    <script>
+        var about = remark.create({
+            sourceUrl: '/workspaces/97710072/project/README.md'
+        });
+    </script>
+</div>
+
+{% endblock %}
