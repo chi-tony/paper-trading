@@ -26,7 +26,8 @@ Session(app)
 
 # Configure CS50 Library to use SQLite database
 db = 'sqlite:///project.db'
-
+engine = create_engine(db, pool_pre_ping=True)
+meta = MetaData()
 
 @app.after_request
 def after_request(response):
@@ -47,8 +48,6 @@ def index():
         user_id = session["user_id"]
 
         # Get list of user stock symbols and share counts
-        engine = create_engine(db)
-        meta = MetaData()
         conn = engine.connect()
         history = Table('history', meta, Column("shares", Integer), autoload=True, autoload_with=engine)
         stmt = select(
@@ -188,8 +187,6 @@ def buy():
         total_buy = Decimal(str(shares * price)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
         # Get current user's cash reserve
-        engine = create_engine(db)
-        meta = MetaData()
         conn = engine.connect()
         users = Table('users', meta, autoload=True, autoload_with=engine)
         stmt = select(users.c.cash).where(users.c.id == session["user_id"])
@@ -229,8 +226,6 @@ def buy():
         index_buy = request.args.get("symbol", default = "", type = str)
 
         # Get current user's cash reserve
-        engine = create_engine(db)
-        meta = MetaData()
         conn = engine.connect()
         users = Table('users', meta, autoload=True, autoload_with=engine)
         stmt = select(users.c.cash).where(users.c.id == session["user_id"])
@@ -251,8 +246,6 @@ def history():
     if request.method == "GET":
 
         # Extract history for user
-        engine = create_engine(db)
-        meta = MetaData()
         conn = engine.connect()
         history = Table('history', meta, Column("shares", Integer), autoload=True, autoload_with=engine)
         stmt = select(history.c.symbol, history.c.name, history.c.shares, history.c.price,
@@ -285,8 +278,6 @@ def login():
             return apology("MUST PROVIDE PASSWORD", 403)
 
         # Query database for username
-        engine = create_engine(db)
-        meta = MetaData()
         conn = engine.connect()
         users = Table('users', meta, autoload=True, autoload_with=engine)
         stmt = select([users]).where(users.c.username == request.form.get("username"))
@@ -385,8 +376,6 @@ def register():
             return apology("MUST PROVIDE USERNAME")
 
         # Query database for username
-        engine = create_engine(db)
-        meta = MetaData()
         conn = engine.connect()
         users = Table('users', meta, autoload=True, autoload_with=engine)
         stmt = select([users]).where(users.c.username == request.form.get("username"))
@@ -510,8 +499,6 @@ def sell():
         price = ticker["currentPrice"]
 
         # Ensure valid number of shares provided
-        engine = create_engine(db)
-        meta = MetaData()
         conn = engine.connect()
         history = Table('history', meta, Column("shares", Integer), autoload=True, autoload_with=engine)
 
@@ -570,8 +557,6 @@ def sell():
     # User reached route via GET (as by clicking a link or via redirect)
     else:
         # Display current holdings as dropdown list
-        engine = create_engine(db)
-        meta = MetaData()
         conn = engine.connect()
         history = Table('history', meta, Column("shares", Integer), autoload=True, autoload_with=engine)
         stmt = select(
@@ -587,8 +572,6 @@ def sell():
         index_sell = request.args.get("symbol", default = "", type = str)
 
         # Get current user's cash reserve
-        engine = create_engine(db)
-        meta = MetaData()
         conn = engine.connect()
         users = Table('users', meta, autoload=True, autoload_with=engine)
         stmt = select(users.c.cash).where(users.c.id == session["user_id"])
@@ -617,8 +600,6 @@ def deposit():
         deposit = float(request.form.get("deposit"))
 
         # Get current user's cash reserve
-        engine = create_engine(db)
-        meta = MetaData()
         conn = engine.connect()
         users = Table('users', meta, autoload=True, autoload_with=engine)
         stmt = select(users.c.cash).where(users.c.id == session["user_id"])
@@ -638,8 +619,6 @@ def deposit():
     else:
 
         # Get current user's cash reserve
-        engine = create_engine(db)
-        meta = MetaData()
         conn = engine.connect()
         users = Table('users', meta, autoload=True, autoload_with=engine)
         stmt = select(users.c.cash).where(users.c.id == session["user_id"])
@@ -664,8 +643,6 @@ def withdraw():
         withdrawal = float(request.form.get("withdraw"))
 
         # Get current user's cash reserve
-        engine = create_engine(db)
-        meta = MetaData()
         conn = engine.connect()
         users = Table('users', meta, autoload=True, autoload_with=engine)
         stmt = select(users.c.cash).where(users.c.id == session["user_id"])
@@ -689,8 +666,6 @@ def withdraw():
     else:
 
         # Get current user's cash reserve
-        engine = create_engine(db)
-        meta = MetaData()
         conn = engine.connect()
         users = Table('users', meta, autoload=True, autoload_with=engine)
         stmt = select(users.c.cash).where(users.c.id == session["user_id"])
@@ -721,8 +696,6 @@ def change_password():
             return apology("MUST PROVIDE CURRENT PASSWORD")
 
         # Ensure current password is correct by comparing hashed password with new password
-        engine = create_engine(db)
-        meta = MetaData()
         conn = engine.connect()
         users = Table('users', meta, autoload=True, autoload_with=engine)
         stmt = select(users.c.hash).where(users.c.id == session["user_id"])
@@ -761,8 +734,6 @@ def change_password():
         new_hash = generate_password_hash(request.form.get("new_password"))
 
         # Update user's password hash in database
-        engine = create_engine(db)
-        meta = MetaData()
         conn = engine.connect()
         users = Table('users', meta, autoload=True, autoload_with=engine)
         stmt = update(users).values(hash = new_hash).where(users.c.id == session["user_id"])
