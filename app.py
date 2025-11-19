@@ -48,26 +48,37 @@ def index():
         user_id = session["user_id"]
 
         # Get list of user stock symbols and share counts
-        conn = engine.connect()
-        history = Table('history', meta, Column("shares", Integer), autoload=True, autoload_with=engine)
-        stmt = select(
+        with engine.connect() as conn:
+            history = Table('history', meta, Column("shares", Integer), autoload=True, autoload_with=engine)
+            users = Table('users', meta, autoload=True, autoload_with=engine)
+            
+            # Get cash reserve for user
+            stmt = select(
+                users.c.cash,
+                users.c.realized
+            ).where(users.c.id == user_id)
+            user_data = conn.execute(stmt).fetchone()
+            
+            cash = Decimal(str(user_data["cash"]))
+            realized = Decimal(str(user_data["realized"]))
+            
+            stmt = select(
                 history.c.symbol,
                 history.c.name,
                 func.sum(history.c.shares).label("shares"),
-                func.sum(history.c.total_cost).label("total_cost")).\
-                where(history.c.user_id == user_id).\
-                group_by(history.c.symbol).\
-                having(func.sum(history.c.shares) > 0).\
-                order_by(history.c.symbol.asc())
-        list_of_tuples = conn.execute(stmt).fetchall()
-        keys = ("symbol", "name", "shares", "total_cost")
-        holdings = [dict(zip(keys, values)) for values in list_of_tuples]
+                func.sum(history.c.total_cost).label("total_cost")
+            ).where(
+                history.c.user_id == user_id
+            ).group_by(
+                history.c.symbol
+            ).having(
+                func.sum(history.c.shares) > 0
+            ).order_by(
+                history.c.symbol.asc()
+            )
+            
+            holdings = [dict(row._mapping) for row in conn.execute(stmt)]
 
-        # Get cash reserve for user
-        users = Table('users', meta, autoload=True, autoload_with=engine)
-        stmt = select(users.c.cash).where(users.c.id == user_id)
-        cash = Decimal(str(conn.execute(stmt).fetchall()[0]["cash"]))
-        
         # Calculate total portfolio value for user, starting with cash
         total = Decimal(str(cash))
 
