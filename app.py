@@ -158,75 +158,68 @@ def buy():
         if int(request.form.get("shares")) <= 0:
             return apology("INVALID NUMBER OF SHARES")
 
-        # Assign symbol as variable
         symbol = request.form.get("symbol").upper()
-
-        # Calculate total cost of stock purchase
         shares = int(request.form.get("shares"))
 
-        # Get Yahoo Finance ticker info for symbol
         ticker = yf.Ticker(symbol).info
-
-        # Define stock name and price variables
-        name = yf.Ticker(symbol).info["longName"]
-
-        # Try to get price
-        try:
-            price = ticker["currentPrice"]
-
-        # Show error page if error
-        except:
-            return apology("ERROR: YFINANCE UPDATE")
+        name = ticker.get("longName")
+        price = ticker.get("currentPrice")
+        if not price:
+            return apology(f"ERROR: YFINANCE UPDATE {symbol}")
 
         # Calculate total price of purchase
         total_buy = Decimal(str(shares * price)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
         # Get current user's cash reserve
-        conn = engine.connect()
-        users = Table('users', meta, autoload=True, autoload_with=engine)
-        stmt = select(users.c.cash).where(users.c.id == session["user_id"])
-        cash = Decimal(str(conn.execute(stmt).fetchall()[0]["cash"]))
+        with engine.connect() as conn:
+            users = Table('users', meta, autoload=True, autoload_with=engine)
+            stmt = select(users.c.cash).where(users.c.id == session["user_id"])
+            cash = Decimal(str(conn.execute(stmt).scalar()))
 
-        # Ensure user has sufficient cash to purchase
-        if total_buy > cash:
-            return apology("INSUFFICIENT CASH")
-
-        # If valid inputs
-        else:
-
-            # Get timestamp
+            # Ensure user has sufficient cash to purchase
+            if total_buy > cash:
+                return apology("INSUFFICIENT CASH")
+            
             tz = timezone('EST')
             timestamp = datetime.now(tz).replace(microsecond=0)
-            timestamp.strftime('%y-%m-%d %H:%M:%S')
+            
+            # Use transaction for atomic operations
+            trans = conn.begin()
+            try:
+                # Update user's cash amount in database
+                stmt = update(users).values(cash = cash - total_buy).where(users.c.id == session["user_id"])
+                conn.execute(stmt)
 
-            # Update user's cash amount in database
-            stmt = update(users).values(cash = cash - total_buy).where(users.c.id == session["user_id"])
-            conn.execute(stmt)
+                # Insert transaction into history table
+                history = Table('history', meta, Column("shares", Integer), autoload=True, autoload_with=engine)
+                stmt = insert(history).values(
+                    user_id = session['user_id'], 
+                    symbol = symbol,
+                    name = name, 
+                    shares = shares, 
+                    price = price,
+                    total_cost = total_buy, 
+                    time = timestamp
+                )
+                conn.execute(stmt)
+                trans.commit()
+            except:
+                trans.rollback()
+                return apology("TRANSACTION FAILED")
 
-            # Insert transaction into history table
-            history = Table('history', meta, Column("shares", Integer), autoload=True, autoload_with=engine)
-            stmt = insert(history).values(user_id = session['user_id'], symbol = symbol,
-               name = name, shares = shares, price = price,
-               total_cost = total_buy, time = timestamp)
-            conn.execute(stmt)
-            conn.close()
-            engine.dispose()
-
-        # Redirect user to home page
-        return redirect("/")
+            # Redirect user to home page
+            return redirect("/")
 
     # User reached route via GET (as by clicking a link or via redirect)
     else:
         # Define symbol selected on index
-        index_buy = request.args.get("symbol", default = "", type = str)
+        index_buy = request.args.get("symbol", default="", type=str)
 
         # Get current user's cash reserve
-        conn = engine.connect()
-        users = Table('users', meta, autoload=True, autoload_with=engine)
-        stmt = select(users.c.cash).where(users.c.id == session["user_id"])
-        cash = Decimal(str(conn.execute(stmt).fetchall()[0]["cash"]))
-        conn.close()
-        engine.dispose()
+        with engine.connect() as conn:
+            users = Table('users', meta, autoload=True, autoload_with=engine)
+            stmt = select(users.c.cash).where(users.c.id == session["user_id"])
+            cash = Decimal(str(conn.execute(stmt).scalar()))
 
         # Render buy page
         return render_template("buy.html", index_buy=index_buy, cash=cash)
