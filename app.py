@@ -6,6 +6,7 @@ from pytz import timezone
 from sqlalchemy import create_engine, select, func, insert, update, and_
 from sqlalchemy import Table, Column, MetaData, Integer
 import yfinance as yf
+from decimal import Decimal, ROUND_HALF_UP
 
 from helpers import apology, login_required, usd, autocomplete
 
@@ -66,17 +67,17 @@ def index():
         # Get cash reserve for user
         users = Table('users', meta, autoload=True, autoload_with=engine)
         stmt = select(users.c.cash).where(users.c.id == user_id)
-        cash = round(float(conn.execute(stmt).fetchall()[0]["cash"]), 2)
-
+        cash = Decimal(str(conn.execute(stmt).fetchall()[0]["cash"]))
+        
         # Calculate total portfolio value for user, starting with cash
-        total = cash
+        total = Decimal(str(cash))
 
         # Initialize unrealized gains
-        unrealized = 0
+        unrealized = Decimal('0')
 
         # Initialize realized gains
         stmt = select(users.c.realized).where(users.c.id == user_id)
-        realized = float(conn.execute(stmt).fetchall()[0]["realized"])
+        realized = Decimal(str(conn.execute(stmt).fetchall()[0]["realized"]))
         conn.close()
         engine.dispose()
 
@@ -95,25 +96,25 @@ def index():
                 return apology("ERROR: YFINANCE UPDATE")
 
             # Calculate total price
-            holding["total"] = round(holding["shares"] * float(holding["price"]), 2)
+            holding["total"] = Decimal(str(holding["shares"] * float(holding["price"]))).quantize(Decimal('0.01'))
 
             # Append symbol to symbols list
             totals[holding["symbol"]] = float(holding["total"])
 
             # Calculate average cost basis
-            holding["average_cost"] = float(holding["total_cost"]) / holding["shares"]
+            holding["average_cost"] = Decimal(str(holding["total_cost"])) / holding["shares"]
 
             # Calculate total gain
-            holding["total_gain"] = float(holding["total"]) - float(holding["total_cost"])
+            holding["total_gain"] = Decimal(str(holding["total"])) - Decimal(str(holding["total_cost"]))
 
             # Add holding gains to unrealized gains
-            unrealized += round(float(holding["total"]) - float(holding["total_cost"]), 2)
+            unrealized += holding["total_gain"]
 
             # Calculate total change
             holding["total_change"] = float(holding["total_gain"]) / float(holding["total_cost"]) * 100
 
             # Add total price to portfolio total value
-            total += float(holding["total"])
+            total += Decimal(str(holding["total"]))
 
         # Calculate total gains
         gains = unrealized + realized
@@ -122,11 +123,12 @@ def index():
         holds = total - cash
 
         # Add cash value to totals dictionary
-        totals["Cash"] = cash
+        totals["Cash"] = float(cash)
 
         # Display portfolio for user
-        return render_template("index.html", holdings=holdings, cash=cash, total=total, unrealized=unrealized,
-            realized=realized, gains=gains, holds=holds, totals=totals)
+        return render_template("index.html", holdings=holdings, cash=float(cash), total=float(total), 
+            unrealized=float(unrealized), realized=float(realized), gains=float(gains), 
+            holds=float(holds), totals=totals)
 
 
 @app.route("/buy", methods=["GET", "POST"])
@@ -183,7 +185,7 @@ def buy():
             return apology("ERROR: YFINANCE UPDATE")
 
         # Calculate total price of purchase
-        total_buy = shares * price
+        total_buy = Decimal(str(shares * price)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
         # Get current user's cash reserve
         engine = create_engine(db)
@@ -191,7 +193,7 @@ def buy():
         conn = engine.connect()
         users = Table('users', meta, autoload=True, autoload_with=engine)
         stmt = select(users.c.cash).where(users.c.id == session["user_id"])
-        cash = round(float(conn.execute(stmt).fetchall()[0]["cash"]), 2)
+        cash = Decimal(str(conn.execute(stmt).fetchall()[0]["cash"]))
 
         # Ensure user has sufficient cash to purchase
         if total_buy > cash:
@@ -232,7 +234,7 @@ def buy():
         conn = engine.connect()
         users = Table('users', meta, autoload=True, autoload_with=engine)
         stmt = select(users.c.cash).where(users.c.id == session["user_id"])
-        cash = round(float(conn.execute(stmt).fetchall()[0]["cash"]), 2)
+        cash = Decimal(str(conn.execute(stmt).fetchall()[0]["cash"]))
         conn.close()
         engine.dispose()
 
@@ -590,7 +592,7 @@ def sell():
         conn = engine.connect()
         users = Table('users', meta, autoload=True, autoload_with=engine)
         stmt = select(users.c.cash).where(users.c.id == session["user_id"])
-        cash = round(float(conn.execute(stmt).fetchall()[0]["cash"]), 2)
+        cash = Decimal(str(conn.execute(stmt).fetchall()[0]["cash"]))
         conn.close()
         engine.dispose()
 
@@ -620,7 +622,7 @@ def deposit():
         conn = engine.connect()
         users = Table('users', meta, autoload=True, autoload_with=engine)
         stmt = select(users.c.cash).where(users.c.id == session["user_id"])
-        cash = round(float(conn.execute(stmt).fetchall()[0]["cash"]), 2)
+        cash = Decimal(str(conn.execute(stmt).fetchall()[0]["cash"]))
 
         # Add to user's cash amount
         stmt = update(users).values(cash = cash + deposit).\
@@ -641,8 +643,8 @@ def deposit():
         conn = engine.connect()
         users = Table('users', meta, autoload=True, autoload_with=engine)
         stmt = select(users.c.cash).where(users.c.id == session["user_id"])
-        cash = round(float(conn.execute(stmt).fetchall()[0]["cash"]), 2)
-
+        cash = Decimal(str(conn.execute(stmt).fetchall()[0]["cash"]))
+        
         return render_template("deposit.html", cash=cash)
 
 
@@ -667,7 +669,7 @@ def withdraw():
         conn = engine.connect()
         users = Table('users', meta, autoload=True, autoload_with=engine)
         stmt = select(users.c.cash).where(users.c.id == session["user_id"])
-        cash = round(float(conn.execute(stmt).fetchall()[0]["cash"]), 2)
+        cash = Decimal(str(conn.execute(stmt).fetchall()[0]["cash"]))
 
         # Ensure user has sufficient cash to withdraw
         if withdrawal > cash:
@@ -692,7 +694,7 @@ def withdraw():
         conn = engine.connect()
         users = Table('users', meta, autoload=True, autoload_with=engine)
         stmt = select(users.c.cash).where(users.c.id == session["user_id"])
-        cash = round(float(conn.execute(stmt).fetchall()[0]["cash"]), 2)
+        cash = Decimal(str(conn.execute(stmt).fetchall()[0]["cash"]))
 
         return render_template("withdraw.html", cash=cash)
 

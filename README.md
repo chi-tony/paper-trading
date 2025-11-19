@@ -185,7 +185,7 @@ This function is used on all pages within the web application except Register an
 
 ### **AutoComplete**
 
-Using Finnhub's API [linked here](https://finnhub.io/docs/api/stock-symbols), this function creates a dictionary of all available stock names and their symbols for use in an AutoComplete script within the Quote tab.
+Using [Finnhub's API](https://finnhub.io/docs/api/stock-symbols), this function creates a dictionary of all available stock names and their symbols for use in an AutoComplete script within the Quote tab.
 
 ### **USD**
 
