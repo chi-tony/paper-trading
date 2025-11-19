@@ -43,6 +43,7 @@ def index():
 
     # User reached route via GET (as by clicking a link or via redirect)
     if request.method == "GET":
+        user_id = session["user_id"]
 
         # Get list of user stock symbols and share counts
         engine = create_engine(db)
@@ -54,7 +55,7 @@ def index():
                 history.c.name,
                 func.sum(history.c.shares).label("shares"),
                 func.sum(history.c.total_cost).label("total_cost")).\
-                where(history.c.user_id == session["user_id"]).\
+                where(history.c.user_id == user_id).\
                 group_by(history.c.symbol).\
                 having(func.sum(history.c.shares) > 0).\
                 order_by(history.c.symbol.asc())
@@ -64,7 +65,7 @@ def index():
 
         # Get cash reserve for user
         users = Table('users', meta, autoload=True, autoload_with=engine)
-        stmt = select(users.c.cash).where(users.c.id == session["user_id"])
+        stmt = select(users.c.cash).where(users.c.id == user_id)
         cash = round(float(conn.execute(stmt).fetchall()[0]["cash"]), 2)
 
         # Calculate total portfolio value for user, starting with cash
@@ -74,7 +75,7 @@ def index():
         unrealized = 0
 
         # Initialize realized gains
-        stmt = select(users.c.realized).where(users.c.id == session["user_id"])
+        stmt = select(users.c.realized).where(users.c.id == user_id)
         realized = float(conn.execute(stmt).fetchall()[0]["realized"])
         conn.close()
         engine.dispose()
@@ -85,8 +86,13 @@ def index():
         # Loop through holding in list of dictionaries
         for holding in holdings:
 
-            # Get price of symbol
-            holding["price"] = yf.Ticker(holding["symbol"]).info["regularMarketPrice"]
+            # Try to get price
+            try:
+                holding["price"] = yf.Ticker(holding["symbol"]).info["currentPrice"]
+
+            # Show error page if error
+            except:
+                return apology("ERROR: YFINANCE UPDATE")
 
             # Calculate total price
             holding["total"] = round(holding["shares"] * float(holding["price"]), 2)
@@ -133,28 +139,28 @@ def buy():
 
         # Ensure symbol was submitted
         if not request.form.get("symbol"):
-            return apology("must provide symbol")
+            return apology("MUST PROVIDE SYMBOL")
 
         # Define list of available symbols
         stock_options = autocomplete()
 
         # Ensure valid symbol was submitted
         if request.form.get("symbol").upper() not in stock_options:
-            return apology("symbol not valid")
+            return apology("SYMBOL NOT VALID")
 
         # Ensure number of shares was submitted
         if not request.form.get("shares"):
-            return apology("must provide shares")
+            return apology("MUST PROVIDE SHARES")
 
         # Try converting share input to an integer
         try:
             int(request.form.get("shares"))
         except:
-            return apology("invalid number of shares")
+            return apology("INVALID NUMBER OF SHARES")
 
         # Ensure valid number of shares
         if int(request.form.get("shares")) <= 0:
-            return apology("invalid number of shares")
+            return apology("INVALID NUMBER OF SHARES")
 
         # Assign symbol as variable
         symbol = request.form.get("symbol").upper()
@@ -166,8 +172,15 @@ def buy():
         ticker = yf.Ticker(symbol).info
 
         # Define stock name and price variables
-        name = ticker["longName"]
-        price = ticker["regularMarketPrice"]
+        name = yf.Ticker(symbol).info["longName"]
+
+        # Try to get price
+        try:
+            price = ticker["currentPrice"]
+
+        # Show error page if error
+        except:
+            return apology("ERROR: YFINANCE UPDATE")
 
         # Calculate total price of purchase
         total_buy = shares * price
@@ -182,7 +195,7 @@ def buy():
 
         # Ensure user has sufficient cash to purchase
         if total_buy > cash:
-            return apology("insuffient cash")
+            return apology("INSUFFICIENT CASH")
 
         # If valid inputs
         else:
@@ -263,11 +276,11 @@ def login():
 
         # Ensure username was submitted
         if not request.form.get("username"):
-            return apology("must provide username", 403)
+            return apology("MUST PROVIDE USERNAME", 403)
 
         # Ensure password was submitted
         elif not request.form.get("password"):
-            return apology("must provide password", 403)
+            return apology("MUST PROVIDE PASSWORD", 403)
 
         # Query database for username
         engine = create_engine(db)
@@ -283,7 +296,7 @@ def login():
         if len(rows) != 1 or not check_password_hash(
             rows[0]["hash"], request.form.get("password")
         ):
-            return apology("invalid username and/or password", 403)
+            return apology("INVALID USERNAME AND/OR PASSWORD", 403)
 
         # Remember which user has logged in
         session["user_id"] = rows[0]["id"]
@@ -317,14 +330,14 @@ def quote():
 
         # Ensure quote was submitted
         if not request.form.get("symbol"):
-            return apology("must provide symbol")
+            return apology("MUST PROVIDE SYMBOL")
 
         # Define list of available symbols
         stock_options = autocomplete()
 
         # Ensure valid quote was submitted
         if request.form.get("symbol").upper() not in stock_options:
-            return apology("symbol not valid")
+            return apology("SYMBOL NOT VALID")
 
         # Define user input stock symbol
         symbol = request.form.get("symbol").upper()
@@ -333,10 +346,15 @@ def quote():
         ticker = yf.Ticker(symbol).info
 
         # Define name of inputted symbol
-        name = ticker["longName"]
+        name = yf.Ticker(symbol).info["longName"]
 
-        # Define price variable
-        price = ticker["regularMarketPrice"]
+        # Try to get price
+        try:
+            price = ticker["currentPrice"]
+
+        # Show error page if error
+        except:
+            return apology("ERROR: YFINANCE UPDATE")
 
         # Show quote of symbol price
         return render_template("quoted.html", name=name, price=price, symbol=symbol)
@@ -362,7 +380,7 @@ def register():
 
         # Ensure username was submitted
         if not request.form.get("username"):
-            return apology("must provide username")
+            return apology("MUST PROVIDE USERNAME")
 
         # Query database for username
         engine = create_engine(db)
@@ -374,33 +392,33 @@ def register():
 
         # Check if username already exists
         if len(rows) == 1:
-            return apology("username already exists")
+            return apology("USERNAME ALREADY EXISTS")
 
         # Ensure password was submitted
         elif not request.form.get("password"):
-            return apology("must provide password")
+            return apology("MUST PROVIDE PASSWORD")
 
         # Ensure password has at least 6 letters
         elif len(request.form.get("password")) < 6:
-            return apology("password must be at least 6 characters")
+            return apology("PASSWORD MUST BE AT LEAST 6 CHARACTERS")
 
         # Ensure password has at least 1 number
         elif not any(character.isdigit() for character in request.form.get("password")):
-            return apology("password must have at least 1 number")
+            return apology("PASSWORD MUST HAVE AT LEAST 1 NUMBER")
 
         # Ensure password has at least 1 special character
         special_characters = "~`!@#$%^&*()_-+=[]:;,.?"
 
         if not any(character in special_characters for character in request.form.get("password")):
-            return apology("password must have at least 1 symbol")
+            return apology("PASSWORD MUST HAVE AT LEAST 1 SYMBOL")
 
         # Ensure password confirmation was submitted
         elif not request.form.get("confirmation"):
-            return apology("must confirm password")
+            return apology("MUST CONFIRM PASSWORD")
 
         # Ensure password matches confirmation
         elif request.form.get("password") != request.form.get("confirmation"):
-            return apology("passwords do not match")
+            return apology("PASSWORDS DO NOT MATCH")
 
         # User info is valid
         else:
@@ -439,28 +457,28 @@ def sell():
 
         # Ensure symbol was submitted
         if not request.form.get("symbol"):
-            return apology("must provide symbol")
+            return apology("MUST PROVIDE SYMBOL")
 
         # Define list of available symbols
         stock_options = autocomplete()
 
         # Ensure valid symbol was submitted
         if request.form.get("symbol") not in stock_options:
-            return apology("symbol not valid")
+            return apology("SYMBOL NOT VALID")
 
         # Ensure number of shares was submitted
         elif not request.form.get("shares"):
-            return apology("must provide shares")
+            return apology("MUST PROVIDE SHARES")
 
         # Try converting share input to an integer
         try:
             int(request.form.get("shares"))
         except:
-            return apology("invalid number of shares")
+            return apology("INVALID NUMBER OF SHARES")
 
         # Ensure valid number of shares
         if int(request.form.get("shares")) <= 0:
-            return apology("invalid number of shares")
+            return apology("INVALID NUMBER OF SHARES")
 
         # Assign symbol as variable
         symbol = request.form.get("symbol").upper()
@@ -472,15 +490,22 @@ def sell():
         ticker = yf.Ticker(symbol).info
 
         # Define stock name and price variables
-        name = ticker["longName"]
-        price = ticker["regularMarketPrice"]
+        name = yf.Ticker(symbol).info["longName"]
+
+        # Try to get price
+        try:
+            price = ticker["currentPrice"]
+
+        # Show error page if error
+        except:
+            return apology("ERROR: YFINANCE UPDATE")
 
         # Get Yahoo Finance ticker info for symbol
         ticker = yf.Ticker(symbol).info
 
         # Define stock name and price variables
-        name = ticker["longName"]
-        price = ticker["regularMarketPrice"]
+        name = yf.Ticker(symbol).info["longName"]
+        price = ticker["currentPrice"]
 
         # Ensure valid number of shares provided
         engine = create_engine(db)
@@ -489,7 +514,7 @@ def sell():
         history = Table('history', meta, Column("shares", Integer), autoload=True, autoload_with=engine)
 
         if shares < 0:
-            return apology("shares not valid")
+            return apology("SHARES NOT VALID")
 
         # Get current number of shares owned
         stmt = select(func.sum(history.c.shares).label("shares")).where(and_(history.c.symbol == symbol,
@@ -498,7 +523,7 @@ def sell():
 
         # Ensure user has enough shares
         if current_shares < shares:
-            return apology("insufficient shares owned")
+            return apology("INSUFFICIENT SHARES OWNED")
 
         # Get timestamp
         tz = timezone('EST')
@@ -584,7 +609,7 @@ def deposit():
 
         # Ensure deposit amount was submitted
         if not request.form.get("deposit"):
-            return apology("must provide deposit")
+            return apology("MUST PROVIDE DEPOSIT")
 
         # Define user input deposit
         deposit = float(request.form.get("deposit"))
@@ -631,7 +656,7 @@ def withdraw():
 
         # Ensure withdrawal amount was submitted
         if not request.form.get("withdraw"):
-            return apology("must provide withdrawal")
+            return apology("MUST PROVIDE WITHDRAWAL")
 
         # Define user input deposit
         withdrawal = float(request.form.get("withdraw"))
@@ -646,7 +671,7 @@ def withdraw():
 
         # Ensure user has sufficient cash to withdraw
         if withdrawal > cash:
-            return apology("insuffient cash")
+            return apology("INSUFFICIENT CASH")
 
         # Subtract from user's cash amount
         stmt = update(users).values(cash = cash - withdrawal).\
@@ -691,7 +716,7 @@ def change_password():
 
         # Ensure current password was submitted
         if not request.form.get("current_password"):
-            return apology("must provide current password")
+            return apology("MUST PROVIDE CURRENT PASSWORD")
 
         # Ensure current password is correct by comparing hashed password with new password
         engine = create_engine(db)
@@ -702,33 +727,33 @@ def change_password():
         current_hash = conn.execute(stmt).fetchall()[0]["hash"]
 
         if not check_password_hash(current_hash, request.form.get("current_password")):
-            return apology("current password is not correct")
+            return apology("CURRENT PASSWORD IS NOT CORRECT")
 
         # Ensure new password was submitted
         elif not request.form.get("new_password"):
-            return apology("must provide new password")
+            return apology("MUST PROVIDE NEW PASSWORD")
 
         # Ensure password has at least 6 letters
         elif len(request.form.get("new_password")) < 6:
-            return apology("password must be at least 6 characters")
+            return apology("PASSWORD MUST BE AT LEAST 6 CHARACTERS")
 
         # Ensure password has at least 1 number
         elif not any(character.isdigit() for character in request.form.get("new_password")):
-            return apology("password must have at least 1 number")
+            return apology("PASSWORD MUST HAVE AT LEAST 1 NUMBER")
 
         # Ensure password has at least 1 special character
         special_characters = "~`!@#$%^&*()_-+=[]:;,.?"
 
         if not any(character in special_characters for character in request.form.get("new_password")):
-            return apology("password must have at least 1 symbol")
+            return apology("PASSWORD MUST HAVE AT LEAST 1 SYMBOL")
 
         # Ensure password confirmation was submitted
         elif not request.form.get("confirmation"):
-            return apology("must confirm password")
+            return apology("MUST CONFIRM PASSWORD")
 
         # Ensure password matches confirmation
         elif request.form.get("new_password") != request.form.get("confirmation"):
-            return apology("passwords do not match")
+            return apology("PASSWORDS DO NOT MATCH")
 
         # Take user's new password and generate new hash
         new_hash = generate_password_hash(request.form.get("new_password"))
