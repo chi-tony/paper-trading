@@ -79,60 +79,44 @@ def index():
             
             holdings = [dict(row._mapping) for row in conn.execute(stmt)]
 
-        # Calculate total portfolio value for user, starting with cash
-        total = Decimal(str(cash))
-
-        # Initialize unrealized gains
+        # Fetch all tickers at once
+        symbols = [h["symbol"] for h in holdings]
+        if symbols:
+            tickers = yf.Tickers(' '.join(symbols))
+            prices = {symbol: tickers.tickers[symbol].info.get("currentPrice") for symbol in symbols}
+        else:
+            prices = {}
+            
+        total = cash
         unrealized = Decimal('0')
-
-        # Initialize realized gains
-        stmt = select(users.c.realized).where(users.c.id == user_id)
-        realized = Decimal(str(conn.execute(stmt).fetchall()[0]["realized"]))
-        conn.close()
-        engine.dispose()
-
-        # Initialize dictionary with symbols as keys and totals as values
         totals = {}
 
-        # Loop through holding in list of dictionaries
+        # Get all gains/stats for each holding
         for holding in holdings:
+            symbol = holding["symbol"]
+            
+            price = prices.get(symbol)
+            if not price:
+                return apology(f"ERROR: YFINANCE UPDATE {symbol}")
 
-            # Try to get price
-            try:
-                holding["price"] = yf.Ticker(holding["symbol"]).info["currentPrice"]
+            holding["price"] = prices
+            shares = holding["shares"]
+            
+            holding_val = Decimal(str(shares * price))
+            holding["total"] = holding_val
+            
+            cost_basis = Decimal(str(holding["total_cost"]))
 
-            # Show error page if error
-            except:
-                return apology("ERROR: YFINANCE UPDATE")
-
-            # Calculate total price
-            holding["total"] = Decimal(str(holding["shares"] * float(holding["price"]))).quantize(Decimal('0.01'))
-
-            # Append symbol to symbols list
-            totals[holding["symbol"]] = float(holding["total"])
-
-            # Calculate average cost basis
-            holding["average_cost"] = Decimal(str(holding["total_cost"])) / holding["shares"]
-
-            # Calculate total gain
-            holding["total_gain"] = Decimal(str(holding["total"])) - Decimal(str(holding["total_cost"]))
-
-            # Add holding gains to unrealized gains
+            # Calculate stats
+            holding["average_cost"] = cost_basis / shares
+            holding["total_gain"] = holding["total_gain"] = holding_val - cost_basis
+            holding["total_change"] = float(holding["total_gain"] / cost_basis * 100)
             unrealized += holding["total_gain"]
+            total += holding_val
+            totals[symbol] = float(holding_val)
 
-            # Calculate total change
-            holding["total_change"] = float(holding["total_gain"]) / float(holding["total_cost"]) * 100
-
-            # Add total price to portfolio total value
-            total += Decimal(str(holding["total"]))
-
-        # Calculate total gains
         gains = unrealized + realized
-
-        # Calculate total portfolio holdings
         holds = total - cash
-
-        # Add cash value to totals dictionary
         totals["Cash"] = float(cash)
 
         # Display portfolio for user
