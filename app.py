@@ -459,85 +459,80 @@ def sell():
         if int(request.form.get("shares")) <= 0:
             return apology("INVALID NUMBER OF SHARES")
 
-        # Assign symbol as variable
         symbol = request.form.get("symbol").upper()
-
-        # Calculate total cost of stock purchase
         shares = int(request.form.get("shares"))
 
-        # Get Yahoo Finance ticker info for symbol
         ticker = yf.Ticker(symbol).info
-
-        # Define stock name and price variables
-        name = yf.Ticker(symbol).info["longName"]
-
-        # Try to get price
-        try:
-            price = ticker["currentPrice"]
-
-        # Show error page if error
-        except:
-            return apology("ERROR: YFINANCE UPDATE")
-
-        # Get Yahoo Finance ticker info for symbol
-        ticker = yf.Ticker(symbol).info
-
-        # Define stock name and price variables
-        name = yf.Ticker(symbol).info["longName"]
-        price = ticker["currentPrice"]
+        name = ticker.get("longName")
+        price = ticker.get("currentPrice")
+        if not price:
+            return apology(f"ERROR: YFINANCE UPDATE {symbol}")
 
         # Ensure valid number of shares provided
-        conn = engine.connect()
-        history = Table('history', meta, Column("shares", Integer), autoload=True, autoload_with=engine)
+        with engine.connect() as conn:
+            history = Table('history', meta, Column("shares", Integer), autoload=True, autoload_with=engine)
+            users = Table('users', meta, autoload=True, autoload_with=engine)
 
-        if shares < 0:
-            return apology("SHARES NOT VALID")
+            # Get current number of shares owned
+            stmt = select(
+                func.sum(history.c.shares).label("total_shares"),
+                func.sum(history.c.total_cost).label("total_cost")
+            ).where(and_(
+                history.c.symbol == symbol,
+                history.c.user_id == session["user_id"]
+            ))
+            position = conn.execute(stmt).fetchone()
 
-        # Get current number of shares owned
-        stmt = select(func.sum(history.c.shares).label("shares")).where(and_(history.c.symbol == symbol,
-            history.c.user_id == session["user_id"]))
-        current_shares = int(conn.execute(stmt).fetchall()[0]["shares"])
+            # Ensure user has enough shares
+            current_shares = position["total_shares"]
+            total_cost = Decimal(str(position["total_cost"]))
+            
+            if shares > current_shares:
+                return apology("INSUFFICIENT SHARES OWNED")
+            
+            # Determine proportional cost basis
+            avg_cost_per_share = total_cost / current_shares
+            sale_cost_basis = avg_cost_per_share * shares
+            sale_price = Decimal(str(shares * price))
+            realized_gain = sale_price - sale_cost_basis
 
-        # Ensure user has enough shares
-        if current_shares < shares:
-            return apology("INSUFFICIENT SHARES OWNED")
-
-        # Get timestamp
-        tz = timezone('EST')
-        timestamp = datetime.now(tz).replace(microsecond=0)
-        timestamp.strftime('%y-%m-%d %H:%M:%S')
-
-        # Calculate total price of sale
-        sale_price = shares * price
-
-        # Get total cost of stock
-        stmt = select(func.sum(history.c.total_cost).label("total_cost")).where(and_(history.c.symbol == symbol,
-            history.c.user_id == session["user_id"]))
-        total_cost = float(conn.execute(stmt).fetchall()[0]["total_cost"])
-
-        # Insert transaction into history table
-        users = Table('users', meta, autoload=True, autoload_with=engine)
-        stmt = insert(history).values(user_id = session["user_id"], symbol = symbol, name = name, shares = -shares,
-            price = price, total_cost = -sale_price, time = timestamp)
-        conn.execute(stmt)
-
-        # Get current user's cash reserve and realized gains
-        stmt = select(users.c.cash, users.c.realized).where(users.c.id == session["user_id"])
-        user_info = conn.execute(stmt).fetchall()
-
-        cash = float(user_info[0]["cash"])
-
-        current_realized = float(user_info[0]["realized"])
-
-        # Get cost spent on shares
-        sale_cost = (total_cost / current_shares) * shares
-
-        # Update user's cash reserve
-        stmt = update(users).values(cash = cash + sale_price, realized = current_realized + sale_price - sale_cost).\
-            where(users.c.id == session["user_id"])
-        conn.execute(stmt)
-        conn.close()
-        engine.dispose()
+            # Get timestamp
+            tz = timezone('EST')
+            timestamp = datetime.now(tz).replace(microsecond=0)
+            
+            trans = conn.begin()
+            try:
+              # Insert negative transaction with proportional cost basis
+                stmt = insert(history).values(
+                    user_id=session["user_id"], 
+                    symbol=symbol, 
+                    name=name,
+                    shares=-shares, 
+                    price=price, 
+                    total_cost=-sale_cost_basis,
+                    time=timestamp
+                )
+                conn.execute(stmt)
+                
+                # Get current cash and realized gains
+                stmt = select(users.c.cash, users.c.realized).where(users.c.id == session["user_id"])
+                user_data = conn.execute(stmt).fetchone()
+                
+                cash = Decimal(str(user_data["cash"]))
+                current_realized = Decimal(str(user_data["realized"]))
+                
+                # Update cash and realized gains
+                stmt = update(users).values(
+                    cash=cash + sale_price,
+                    realized=current_realized + realized_gain
+                ).where(users.c.id == session["user_id"])
+                conn.execute(stmt)
+                
+                trans.commit()
+                
+            except Exception as e:
+                trans.rollback()
+                return apology(f"TRANSACTION FAILED: {str(e)}")
 
         # Redirect user to home page
         return redirect("/")
