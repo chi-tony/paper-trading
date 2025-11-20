@@ -3,12 +3,30 @@ from flask_session import Session
 from werkzeug.security import check_password_hash, generate_password_hash
 from datetime import datetime
 from pytz import timezone
-from sqlalchemy import create_engine, select, func, insert, update, and_
+from sqlalchemy import create_engine, select, func, insert, update, and_, TypeDecorator, String
 from sqlalchemy import Table, Column, MetaData, Integer
 import yfinance as yf
 from decimal import Decimal, ROUND_HALF_UP
 
 from helpers import apology, login_required, usd, autocomplete
+
+# Custom type to store Decimals as Strings in SQLite
+class SqliteDecimal(TypeDecorator):
+    """Store Decimal objects as strings in SQLite for precision"""
+    impl = String
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        """Convert Decimal to string when storing"""
+        if value is not None:
+            return str(value)
+        return value
+
+    def process_result_value(self, value, dialect):
+        """Convert string back to Decimal when fetching"""
+        if value is not None:
+            return Decimal(value)
+        return value
 
 # Configure application
 app = Flask(__name__)
@@ -49,7 +67,7 @@ def index():
 
         # Get list of user stock symbols and share counts
         with engine.connect() as conn:
-            history = Table('history', meta, Column("shares", Integer), autoload=True, autoload_with=engine)
+            history = Table('history', meta, Column("shares", Integer), autoload=True, autoload_with=engine, extend_existing=True)
             users = Table('users', meta, autoload=True, autoload_with=engine)
             
             # Get cash reserve for user
@@ -99,19 +117,21 @@ def index():
             if not price:
                 return apology(f"ERROR: YFINANCE UPDATE {symbol}")
 
-            holding["price"] = prices
+            holding["price"] = price
             shares = holding["shares"]
             
-            holding_val = Decimal(str(shares * price))
-            holding["total"] = holding_val
+            holding_val = Decimal(str(shares * price)).quantize(Decimal('0.01'))
+            holding["total"] = float(holding_val)
             
             cost_basis = Decimal(str(holding["total_cost"]))
 
             # Calculate stats
-            holding["average_cost"] = cost_basis / shares
-            holding["total_gain"] = holding["total_gain"] = holding_val - cost_basis
-            holding["total_change"] = float(holding["total_gain"] / cost_basis * 100)
-            unrealized += holding["total_gain"]
+            holding["average_cost"] = float(cost_basis / shares)
+            total_gain = holding_val - cost_basis
+            holding["total_gain"] = float(total_gain)
+            holding["total_change"] = float(total_gain / cost_basis * 100)
+            
+            unrealized += total_gain
             total += holding_val
             totals[symbol] = float(holding_val)
 
@@ -191,7 +211,7 @@ def buy():
                 conn.execute(stmt)
 
                 # Insert transaction into history table
-                history = Table('history', meta, Column("shares", Integer), autoload=True, autoload_with=engine)
+                history = Table('history', meta, Column("shares", Integer), autoload=True, autoload_with=engine, extend_existing=True)
                 stmt = insert(history).values(
                     user_id = session['user_id'], 
                     symbol = symbol,
@@ -235,7 +255,7 @@ def history():
 
         # Extract history for user
         conn = engine.connect()
-        history = Table('history', meta, Column("shares", Integer), autoload=True, autoload_with=engine)
+        history = Table('history', meta, Column("shares", Integer), autoload=True, autoload_with=engine, extend_existing=True)
         stmt = select(history.c.symbol, history.c.name, history.c.shares, history.c.price,
             history.c.total_cost, history.c.time).where(history.c.user_id == session["user_id"]).\
             order_by(history.c.time.desc())
@@ -470,7 +490,7 @@ def sell():
 
         # Ensure valid number of shares provided
         with engine.connect() as conn:
-            history = Table('history', meta, Column("shares", Integer), autoload=True, autoload_with=engine)
+            history = Table('history', meta, Column("shares", Integer), autoload=True, autoload_with=engine, extend_existing=True)
             users = Table('users', meta, autoload=True, autoload_with=engine)
 
             # Get current number of shares owned
@@ -541,7 +561,7 @@ def sell():
     else:
         # Display current holdings as dropdown list
         with engine.connect() as conn:
-            history = Table('history', meta, Column("shares", Integer), autoload=True, autoload_with=engine)
+            history = Table('history', meta, Column("shares", Integer), autoload=True, autoload_with=engine, extend_existing=True)
             users = Table('users', meta, autoload=True, autoload_with=engine)
             
             stmt = select(
@@ -556,7 +576,7 @@ def sell():
             ).order_by(
                 history.c.symbol.asc()
             )
-            holding_symbols = conn.execute(stmt)
+            holding_symbols = conn.execute(stmt).fetchall()
 
             # Define symbol selected on index
             index_sell = request.args.get("symbol", default="", type=str)
@@ -565,9 +585,9 @@ def sell():
             stmt = select(users.c.cash).where(users.c.id == session["user_id"])
             cash = Decimal(str(conn.execute(stmt).scalar()))
 
-    # Render sell page
-    return render_template("sell.html", holding_symbols=holding_symbols,
-        index_sell=index_sell, cash=cash)
+        # Render sell page
+        return render_template("sell.html", holding_symbols=holding_symbols,
+            index_sell=index_sell, cash=cash)
 
 
 @app.route("/deposit", methods=["GET", "POST"])
@@ -583,7 +603,7 @@ def deposit():
             return apology("MUST PROVIDE DEPOSIT")
 
         # Define user input deposit
-        deposit = float(request.form.get("deposit"))
+        deposit = Decimal(str(request.form.get("deposit")))
 
         # Get current user's cash reserve
         with engine.connect() as conn:
@@ -623,7 +643,7 @@ def withdraw():
             return apology("MUST PROVIDE WITHDRAWAL")
 
         # Define user input deposit
-        withdrawal = float(request.form.get("withdraw"))
+        withdrawal = Decimal(str(request.form.get("withdraw")))
 
         # Get current user's cash reserve
         with engine.connect() as conn:
