@@ -254,14 +254,12 @@ def history():
     if request.method == "GET":
 
         # Extract history for user
-        conn = engine.connect()
-        history = Table('history', meta, Column("shares", Integer), autoload=True, autoload_with=engine, extend_existing=True)
-        stmt = select(history.c.symbol, history.c.name, history.c.shares, history.c.price,
-            history.c.total_cost, history.c.time).where(history.c.user_id == session["user_id"]).\
-            order_by(history.c.time.desc())
-        transactions = conn.execute(stmt).fetchall()
-        conn.close()
-        engine.dispose()
+        with engine.connect() as conn:
+            history = Table('history', meta, Column("shares", Integer), autoload=True, autoload_with=engine, extend_existing=True)
+            stmt = select(history.c.symbol, history.c.name, history.c.shares, history.c.price,
+                history.c.total_cost, history.c.time).where(history.c.user_id == session["user_id"]).\
+                order_by(history.c.time.desc())
+            transactions = conn.execute(stmt).fetchall()
 
         # Display history log for user
         return render_template("history.html", transactions=transactions)
@@ -286,12 +284,10 @@ def login():
             return apology("MUST PROVIDE PASSWORD", 403)
 
         # Query database for username
-        conn = engine.connect()
-        users = Table('users', meta, autoload=True, autoload_with=engine)
-        stmt = select([users]).where(users.c.username == request.form.get("username"))
-        rows = conn.execute(stmt).fetchall()
-        conn.close()
-        engine.dispose()
+        with engine.connect() as conn:
+            users = Table('users', meta, autoload=True, autoload_with=engine)
+            stmt = select([users]).where(users.c.username == request.form.get("username"))
+            rows = conn.execute(stmt).fetchall()
 
         # Ensure username exists and password is correct
         if len(rows) != 1 or not check_password_hash(
@@ -384,59 +380,63 @@ def register():
             return apology("MUST PROVIDE USERNAME")
 
         # Query database for username
-        conn = engine.connect()
-        users = Table('users', meta, autoload=True, autoload_with=engine)
-        stmt = select([users]).where(users.c.username == request.form.get("username"))
-        rows = conn.execute(stmt).fetchall()
+        with engine.connect() as conn:
+            users = Table('users', meta, autoload=True, autoload_with=engine)
+            stmt = select([users]).where(users.c.username == request.form.get("username"))
+            rows = conn.execute(stmt).fetchall()
 
-        # Check if username already exists
-        if len(rows) == 1:
-            return apology("USERNAME ALREADY EXISTS")
+            # Check if username already exists
+            if len(rows) == 1:
+                return apology("USERNAME ALREADY EXISTS")
 
-        # Ensure password was submitted
-        elif not request.form.get("password"):
-            return apology("MUST PROVIDE PASSWORD")
+            # Ensure password was submitted
+            elif not request.form.get("password"):
+                return apology("MUST PROVIDE PASSWORD")
 
-        # Ensure password has at least 6 letters
-        elif len(request.form.get("password")) < 6:
-            return apology("PASSWORD MUST BE AT LEAST 6 CHARACTERS")
+            # Ensure password has at least 6 letters
+            elif len(request.form.get("password")) < 6:
+                return apology("PASSWORD MUST BE AT LEAST 6 CHARACTERS")
 
-        # Ensure password has at least 1 number
-        elif not any(character.isdigit() for character in request.form.get("password")):
-            return apology("PASSWORD MUST HAVE AT LEAST 1 NUMBER")
+            # Ensure password has at least 1 number
+            elif not any(character.isdigit() for character in request.form.get("password")):
+                return apology("PASSWORD MUST HAVE AT LEAST 1 NUMBER")
 
-        # Ensure password has at least 1 special character
-        special_characters = "~`!@#$%^&*()_-+=[]:;,.?"
+            # Ensure password has at least 1 special character
+            special_characters = "~`!@#$%^&*()_-+=[]:;,.?"
 
-        if not any(character in special_characters for character in request.form.get("password")):
-            return apology("PASSWORD MUST HAVE AT LEAST 1 SYMBOL")
+            if not any(character in special_characters for character in request.form.get("password")):
+                return apology("PASSWORD MUST HAVE AT LEAST 1 SYMBOL")
 
-        # Ensure password confirmation was submitted
-        elif not request.form.get("confirmation"):
-            return apology("MUST CONFIRM PASSWORD")
+            # Ensure password confirmation was submitted
+            elif not request.form.get("confirmation"):
+                return apology("MUST CONFIRM PASSWORD")
 
-        # Ensure password matches confirmation
-        elif request.form.get("password") != request.form.get("confirmation"):
-            return apology("PASSWORDS DO NOT MATCH")
+            # Ensure password matches confirmation
+            elif request.form.get("password") != request.form.get("confirmation"):
+                return apology("PASSWORDS DO NOT MATCH")
 
-        # User info is valid
-        else:
-            # Get username and hash password
-            username = request.form.get("username")
-            hash = generate_password_hash(request.form.get("password"))
+            # User info is valid
+            else:
+                # Get username and hash password
+                username = request.form.get("username")
+                hash = generate_password_hash(request.form.get("password"))
 
-            # Increment user ID by 1; if no users available, set user_id to 1
-            try:
-                stmt = select(func.max(users.c.id).label("max_id"))
-                user_id = conn.execute(stmt).fetchone()["max_id"] + 1
-            except:
-                user_id = 1
-
-            # Insert username and password hash to users table
-            stmt = insert(users).values(id = user_id, username = username, hash = hash)
-            conn.execute(stmt)
-            conn.close()
-            engine.dispose()
+                # Increment user ID by 1; if no users available, set user_id to 1
+                try:
+                    stmt = select(func.max(users.c.id).label("max_id"))
+                    user_id = conn.execute(stmt).fetchone()["max_id"] + 1
+                except:
+                    user_id = 1
+                    
+                # Insert username and password hash to users table
+                trans = conn.begin()
+                try:
+                    stmt = insert(users).values(id = user_id, username = username, hash = hash)
+                    conn.execute(stmt)
+                    trans.commit()
+                except:
+                    trans.rollback()
+                    return apology("REGISTRATION FAILED")
 
         # Redirect user to home page
         return redirect("/")
@@ -613,10 +613,6 @@ def deposit():
             
             tz = timezone('EST')
             timestamp = datetime.now(tz).replace(microsecond=0)
-
-            # Add to user's cash amount
-            stmt = update(users).values(cash = cash + deposit).where(users.c.id == session["user_id"])
-            conn.execute(stmt)
             
             trans = conn.begin()
             try:
@@ -682,11 +678,6 @@ def withdraw():
             if withdrawal > cash:
                 return apology("INSUFFICIENT CASH")
 
-            # Subtract from user's cash amount
-            stmt = update(users).values(cash = cash - withdrawal).\
-                where(users.c.id == session["user_id"])
-            conn.execute(stmt)
-            
             tz = timezone('EST')
             timestamp = datetime.now(tz).replace(microsecond=0)
             
@@ -788,9 +779,14 @@ def change_password():
             new_hash = generate_password_hash(request.form.get("new_password"))
 
             # Update user's password hash in database
-            users = Table('users', meta, autoload=True, autoload_with=engine)
-            stmt = update(users).values(hash = new_hash).where(users.c.id == session["user_id"])
-            conn.execute(stmt)
+            trans = conn.begin()
+            try:
+                stmt = update(users).values(hash = new_hash).where(users.c.id == session["user_id"])
+                conn.execute(stmt)
+                trans.commit()
+            except:
+                trans.rollback()
+                return apology("PASSWORD UPDATE FAILED")
 
         # Redirect to homepage
         return redirect("/")
