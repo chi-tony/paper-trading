@@ -666,7 +666,7 @@ def withdraw():
             return apology("MUST PROVIDE WITHDRAWAL")
 
         # Define user input deposit
-        withdrawal = Decimal(str(request.form.get("withdraw")))
+        withdraw = Decimal(str(request.form.get("withdraw")))
 
         # Get current user's cash reserve
         with engine.connect() as conn:
@@ -675,7 +675,7 @@ def withdraw():
             cash = Decimal(str(conn.execute(stmt).scalar()))
 
             # Ensure user has sufficient cash to withdraw
-            if withdrawal > cash:
+            if withdraw > cash:
                 return apology("INSUFFICIENT CASH")
 
             tz = timezone('EST')
@@ -684,7 +684,7 @@ def withdraw():
             trans = conn.begin()
             try:
                 # Subtract from user's cash amount
-                stmt = update(users).values(cash = cash - withdrawal).where(users.c.id == session["user_id"])
+                stmt = update(users).values(cash = cash - withdraw).where(users.c.id == session["user_id"])
                 conn.execute(stmt)
                 
                 # Update history table
@@ -692,10 +692,10 @@ def withdraw():
                 stmt = insert(history).values(
                     user_id = session['user_id'],
                     symbol = 'WITHDRAW',
-                    name = 'Cash Withdrawal',
+                    name = 'Withdraw',
                     shares = 0,
                     price = 0,
-                    total_cost = -withdrawal,
+                    total_cost = -withdraw,
                     time = timestamp
                 )
                 conn.execute(stmt)
