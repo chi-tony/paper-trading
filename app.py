@@ -540,31 +540,34 @@ def sell():
     # User reached route via GET (as by clicking a link or via redirect)
     else:
         # Display current holdings as dropdown list
-        conn = engine.connect()
-        history = Table('history', meta, Column("shares", Integer), autoload=True, autoload_with=engine)
-        stmt = select(
-            history.c.symbol,
-            func.sum(history.c.shares).label("shares")).\
-            where(history.c.user_id == session["user_id"]).\
-            group_by(history.c.symbol).\
-            having(func.sum(history.c.shares) > 0).\
-            order_by(history.c.symbol.asc())
-        holding_symbols = conn.execute(stmt)
+        with engine.connect() as conn:
+            history = Table('history', meta, Column("shares", Integer), autoload=True, autoload_with=engine)
+            users = Table('users', meta, autoload=True, autoload_with=engine)
+            
+            stmt = select(
+                history.c.symbol,
+                func.sum(history.c.shares).label("shares")
+            ).where(
+                history.c.user_id == session["user_id"]
+            ).group_by(
+                history.c.symbol
+            ).having(
+                func.sum(history.c.shares) > 0
+            ).order_by(
+                history.c.symbol.asc()
+            )
+            holding_symbols = conn.execute(stmt)
 
-        # Define symbol selected on index
-        index_sell = request.args.get("symbol", default = "", type = str)
+            # Define symbol selected on index
+            index_sell = request.args.get("symbol", default="", type=str)
 
-        # Get current user's cash reserve
-        conn = engine.connect()
-        users = Table('users', meta, autoload=True, autoload_with=engine)
-        stmt = select(users.c.cash).where(users.c.id == session["user_id"])
-        cash = Decimal(str(conn.execute(stmt).fetchall()[0]["cash"]))
-        conn.close()
-        engine.dispose()
+            # Get current user's cash reserve
+            stmt = select(users.c.cash).where(users.c.id == session["user_id"])
+            cash = Decimal(str(conn.execute(stmt).scalar()))
 
-        # Render sell page
-        return render_template("sell.html", holding_symbols=holding_symbols,
-            index_sell=index_sell, cash=cash)
+    # Render sell page
+    return render_template("sell.html", holding_symbols=holding_symbols,
+        index_sell=index_sell, cash=cash)
 
 
 @app.route("/deposit", methods=["GET", "POST"])
@@ -583,17 +586,14 @@ def deposit():
         deposit = float(request.form.get("deposit"))
 
         # Get current user's cash reserve
-        conn = engine.connect()
-        users = Table('users', meta, autoload=True, autoload_with=engine)
-        stmt = select(users.c.cash).where(users.c.id == session["user_id"])
-        cash = Decimal(str(conn.execute(stmt).fetchall()[0]["cash"]))
+        with engine.connect() as conn:
+            users = Table('users', meta, autoload=True, autoload_with=engine)
+            stmt = select(users.c.cash).where(users.c.id == session["user_id"])
+            cash = Decimal(str(conn.execute(stmt).scalar()))
 
-        # Add to user's cash amount
-        stmt = update(users).values(cash = cash + deposit).\
-            where(users.c.id == session["user_id"])
-        conn.execute(stmt)
-        conn.close()
-        engine.dispose()
+            # Add to user's cash amount
+            stmt = update(users).values(cash = cash + deposit).where(users.c.id == session["user_id"])
+            conn.execute(stmt)
 
         # Redirect to homepage
         return redirect("/")
@@ -602,10 +602,10 @@ def deposit():
     else:
 
         # Get current user's cash reserve
-        conn = engine.connect()
-        users = Table('users', meta, autoload=True, autoload_with=engine)
-        stmt = select(users.c.cash).where(users.c.id == session["user_id"])
-        cash = Decimal(str(conn.execute(stmt).fetchall()[0]["cash"]))
+        with engine.connect() as conn:
+            users = Table('users', meta, autoload=True, autoload_with=engine)
+            stmt = select(users.c.cash).where(users.c.id == session["user_id"])
+            cash = Decimal(str(conn.execute(stmt).scalar()))
         
         return render_template("deposit.html", cash=cash)
 
@@ -626,21 +626,19 @@ def withdraw():
         withdrawal = float(request.form.get("withdraw"))
 
         # Get current user's cash reserve
-        conn = engine.connect()
-        users = Table('users', meta, autoload=True, autoload_with=engine)
-        stmt = select(users.c.cash).where(users.c.id == session["user_id"])
-        cash = Decimal(str(conn.execute(stmt).fetchall()[0]["cash"]))
+        with engine.connect() as conn:
+            users = Table('users', meta, autoload=True, autoload_with=engine)
+            stmt = select(users.c.cash).where(users.c.id == session["user_id"])
+            cash = Decimal(str(conn.execute(stmt).scalar()))
 
-        # Ensure user has sufficient cash to withdraw
-        if withdrawal > cash:
-            return apology("INSUFFICIENT CASH")
+            # Ensure user has sufficient cash to withdraw
+            if withdrawal > cash:
+                return apology("INSUFFICIENT CASH")
 
-        # Subtract from user's cash amount
-        stmt = update(users).values(cash = cash - withdrawal).\
-            where(users.c.id == session["user_id"])
-        conn.execute(stmt)
-        conn.close()
-        engine.dispose()
+            # Subtract from user's cash amount
+            stmt = update(users).values(cash = cash - withdrawal).\
+                where(users.c.id == session["user_id"])
+            conn.execute(stmt)
 
         # Redirect to homepage
         return redirect("/")
@@ -649,10 +647,10 @@ def withdraw():
     else:
 
         # Get current user's cash reserve
-        conn = engine.connect()
-        users = Table('users', meta, autoload=True, autoload_with=engine)
-        stmt = select(users.c.cash).where(users.c.id == session["user_id"])
-        cash = Decimal(str(conn.execute(stmt).fetchall()[0]["cash"]))
+        with engine.connect() as conn:
+            users = Table('users', meta, autoload=True, autoload_with=engine)
+            stmt = select(users.c.cash).where(users.c.id == session["user_id"])
+            cash = Decimal(str(conn.execute(stmt).scalar()))
 
         return render_template("withdraw.html", cash=cash)
 
@@ -679,48 +677,47 @@ def change_password():
             return apology("MUST PROVIDE CURRENT PASSWORD")
 
         # Ensure current password is correct by comparing hashed password with new password
-        conn = engine.connect()
-        users = Table('users', meta, autoload=True, autoload_with=engine)
-        stmt = select(users.c.hash).where(users.c.id == session["user_id"])
-        current_hash = conn.execute(stmt).fetchall()[0]["hash"]
+        with engine.connect() as conn:
+            users = Table('users', meta, autoload=True, autoload_with=engine)
+            stmt = select(users.c.hash).where(users.c.id == session["user_id"])
+            current_hash = conn.execute(stmt).fetchall()[0]["hash"]
 
-        if not check_password_hash(current_hash, request.form.get("current_password")):
-            return apology("CURRENT PASSWORD IS NOT CORRECT")
+            if not check_password_hash(current_hash, request.form.get("current_password")):
+                return apology("CURRENT PASSWORD IS NOT CORRECT")
 
-        # Ensure new password was submitted
-        elif not request.form.get("new_password"):
-            return apology("MUST PROVIDE NEW PASSWORD")
+            # Ensure new password was submitted
+            elif not request.form.get("new_password"):
+                return apology("MUST PROVIDE NEW PASSWORD")
 
-        # Ensure password has at least 6 letters
-        elif len(request.form.get("new_password")) < 6:
-            return apology("PASSWORD MUST BE AT LEAST 6 CHARACTERS")
+            # Ensure password has at least 6 letters
+            elif len(request.form.get("new_password")) < 6:
+                return apology("PASSWORD MUST BE AT LEAST 6 CHARACTERS")
 
-        # Ensure password has at least 1 number
-        elif not any(character.isdigit() for character in request.form.get("new_password")):
-            return apology("PASSWORD MUST HAVE AT LEAST 1 NUMBER")
+            # Ensure password has at least 1 number
+            elif not any(character.isdigit() for character in request.form.get("new_password")):
+                return apology("PASSWORD MUST HAVE AT LEAST 1 NUMBER")
 
-        # Ensure password has at least 1 special character
-        special_characters = "~`!@#$%^&*()_-+=[]:;,.?"
+            # Ensure password has at least 1 special character
+            special_characters = "~`!@#$%^&*()_-+=[]:;,.?"
 
-        if not any(character in special_characters for character in request.form.get("new_password")):
-            return apology("PASSWORD MUST HAVE AT LEAST 1 SYMBOL")
+            if not any(character in special_characters for character in request.form.get("new_password")):
+                return apology("PASSWORD MUST HAVE AT LEAST 1 SYMBOL")
 
-        # Ensure password confirmation was submitted
-        elif not request.form.get("confirmation"):
-            return apology("MUST CONFIRM PASSWORD")
+            # Ensure password confirmation was submitted
+            elif not request.form.get("confirmation"):
+                return apology("MUST CONFIRM PASSWORD")
 
-        # Ensure password matches confirmation
-        elif request.form.get("new_password") != request.form.get("confirmation"):
-            return apology("PASSWORDS DO NOT MATCH")
+            # Ensure password matches confirmation
+            elif request.form.get("new_password") != request.form.get("confirmation"):
+                return apology("PASSWORDS DO NOT MATCH")
 
-        # Take user's new password and generate new hash
-        new_hash = generate_password_hash(request.form.get("new_password"))
+            # Take user's new password and generate new hash
+            new_hash = generate_password_hash(request.form.get("new_password"))
 
-        # Update user's password hash in database
-        conn = engine.connect()
-        users = Table('users', meta, autoload=True, autoload_with=engine)
-        stmt = update(users).values(hash = new_hash).where(users.c.id == session["user_id"])
-        conn.execute(stmt)
+            # Update user's password hash in database
+            users = Table('users', meta, autoload=True, autoload_with=engine)
+            stmt = update(users).values(hash = new_hash).where(users.c.id == session["user_id"])
+            conn.execute(stmt)
 
         # Redirect to homepage
         return redirect("/")
