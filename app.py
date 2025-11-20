@@ -524,13 +524,13 @@ def sell():
             try:
               # Insert negative transaction with proportional cost basis
                 stmt = insert(history).values(
-                    user_id=session["user_id"], 
-                    symbol=symbol, 
-                    name=name,
-                    shares=-shares, 
-                    price=price, 
-                    total_cost=-sale_cost_basis,
-                    time=timestamp
+                    user_id = session["user_id"], 
+                    symbol = symbol, 
+                    name = name,
+                    shares = -shares, 
+                    price = price, 
+                    total_cost = -sale_cost_basis,
+                    time = timestamp
                 )
                 conn.execute(stmt)
                 
@@ -610,10 +610,37 @@ def deposit():
             users = Table('users', meta, autoload=True, autoload_with=engine)
             stmt = select(users.c.cash).where(users.c.id == session["user_id"])
             cash = Decimal(str(conn.execute(stmt).scalar()))
+            
+            tz = timezone('EST')
+            timestamp = datetime.now(tz).replace(microsecond=0)
 
             # Add to user's cash amount
             stmt = update(users).values(cash = cash + deposit).where(users.c.id == session["user_id"])
             conn.execute(stmt)
+            
+            trans = conn.begin()
+            try:
+                # Add to user's cash amount
+                stmt = update(users).values(cash = cash + deposit).where(users.c.id == session["user_id"])
+                conn.execute(stmt)
+                
+                # Update history table
+                history = Table('history', meta, Column("shares", Integer), autoload=True, autoload_with=engine, extend_existing=True)
+                stmt = insert(history).values(
+                    user_id = session['user_id'],
+                    symbol = 'DEPOSIT',
+                    name = 'Deposit',
+                    shares = 0,
+                    price = 0,
+                    total_cost = deposit,
+                    time = timestamp
+                )
+                conn.execute(stmt)
+                trans.commit()
+                
+            except:
+                trans.rollback()
+                return apology("TRANSACTION FAILED")
 
         # Redirect to homepage
         return redirect("/")
@@ -659,6 +686,32 @@ def withdraw():
             stmt = update(users).values(cash = cash - withdrawal).\
                 where(users.c.id == session["user_id"])
             conn.execute(stmt)
+            
+            tz = timezone('EST')
+            timestamp = datetime.now(tz).replace(microsecond=0)
+            
+            trans = conn.begin()
+            try:
+                # Subtract from user's cash amount
+                stmt = update(users).values(cash = cash - withdrawal).where(users.c.id == session["user_id"])
+                conn.execute(stmt)
+                
+                # Update history table
+                history = Table('history', meta, Column("shares", Integer), autoload=True, autoload_with=engine, extend_existing=True)
+                stmt = insert(history).values(
+                    user_id = session['user_id'],
+                    symbol = 'WITHDRAW',
+                    name = 'Cash Withdrawal',
+                    shares = 0,
+                    price = 0,
+                    total_cost = -withdrawal,
+                    time = timestamp
+                )
+                conn.execute(stmt)
+                trans.commit()
+            except:
+                trans.rollback()
+                return apology("TRANSACTION FAILED")
 
         # Redirect to homepage
         return redirect("/")
